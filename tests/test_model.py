@@ -20,15 +20,15 @@ from src.model import (
 
 @pytest.fixture
 def dark_store_inputs():
-    """Dark store example: CAC $18, AOV $34, 2.8 orders/mo, 30% GM, $4.20 VC, 8% churn."""
+    """Dark store example: blended CAC $18, AOV $34, 2.8 orders/mo, 30% GM, $4.20 VC, 8% churn."""
     return UnitEconInputs(
-        cac=18.0,
         aov=34.0,
         orders_per_month=2.8,
         gross_margin_pct=0.30,
         variable_cost_per_order=4.20,
         monthly_churn_rate=0.08,
         monthly_fixed_costs=12000.0,
+        channels=[{"name": "Blended", "cac": 18.0, "pct_of_new_customers": 1.0}],
     )
 
 
@@ -36,13 +36,13 @@ def dark_store_inputs():
 def bad_economics_inputs():
     """Inputs where CAC >> LTV (very high CAC, thin margins, high churn)."""
     return UnitEconInputs(
-        cac=500.0,
         aov=20.0,
         orders_per_month=1.0,
         gross_margin_pct=0.15,
         variable_cost_per_order=2.50,
         monthly_churn_rate=0.30,
         monthly_fixed_costs=5000.0,
+        channels=[{"name": "Blended", "cac": 500.0, "pct_of_new_customers": 1.0}],
     )
 
 
@@ -50,13 +50,13 @@ def bad_economics_inputs():
 def high_churn_inputs():
     """Inputs with very high monthly churn (> 10%)."""
     return UnitEconInputs(
-        cac=50.0,
         aov=40.0,
         orders_per_month=2.0,
         gross_margin_pct=0.40,
         variable_cost_per_order=3.00,
         monthly_churn_rate=0.15,
         monthly_fixed_costs=8000.0,
+        channels=[{"name": "Blended", "cac": 50.0, "pct_of_new_customers": 1.0}],
     )
 
 
@@ -96,9 +96,10 @@ class TestLTV:
 
     def test_zero_churn_gives_infinite_ltv(self):
         inputs = UnitEconInputs(
-            cac=18.0, aov=34.0, orders_per_month=2.8,
+            aov=34.0, orders_per_month=2.8,
             gross_margin_pct=0.30, variable_cost_per_order=4.20,
             monthly_churn_rate=0.0,
+            channels=[{"name": "Blended", "cac": 18.0, "pct_of_new_customers": 1.0}],
         )
         assert compute_ltv(inputs) == float("inf")
 

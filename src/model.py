@@ -15,7 +15,6 @@ from typing import List
 @dataclass
 class UnitEconInputs:
     """All inputs needed for the unit economics model."""
-    cac: float                    # Customer acquisition cost ($)
     aov: float                    # Average order value ($)
     orders_per_month: float       # Orders per customer per month
     gross_margin_pct: float       # Gross margin as a decimal (e.g. 0.30)
@@ -23,6 +22,18 @@ class UnitEconInputs:
     monthly_churn_rate: float     # Monthly churn as a decimal (e.g. 0.08)
     monthly_fixed_costs: float = 0.0  # Monthly fixed overhead ($)
     annual_discount_rate: float = 0.10  # Cost of capital / hurdle rate
+    channels: list = field(default_factory=lambda: [
+        {"name": "Paid", "cac": 25.0, "pct_of_new_customers": 0.60},
+        {"name": "Organic", "cac": 8.0, "pct_of_new_customers": 0.30},
+        {"name": "Referral", "cac": 4.0, "pct_of_new_customers": 0.10},
+    ])
+
+    @property
+    def blended_cac(self) -> float:
+        """Weighted-average CAC across all acquisition channels."""
+        if not self.channels:
+            return 0.0
+        return sum(ch["cac"] * ch["pct_of_new_customers"] for ch in self.channels)
 
 
 @dataclass
@@ -68,19 +79,19 @@ def compute_ltv(inputs: UnitEconInputs) -> float:
 
 
 def compute_ltv_cac_ratio(inputs: UnitEconInputs) -> float:
-    """LTV : CAC ratio."""
+    """LTV : CAC ratio (uses blended CAC across channels)."""
     ltv = compute_ltv(inputs)
-    if inputs.cac <= 0:
+    if inputs.blended_cac <= 0:
         return float("inf")
-    return ltv / inputs.cac
+    return ltv / inputs.blended_cac
 
 
 def compute_payback_months(inputs: UnitEconInputs) -> float:
-    """Payback period in months = CAC / monthly_contribution."""
+    """Payback period in months = blended_cac / monthly_contribution."""
     mc = compute_monthly_contribution(inputs)
     if mc <= 0:
         return float("inf")
-    return inputs.cac / mc
+    return inputs.blended_cac / mc
 
 
 def compute_discounted_ltv(inputs: UnitEconInputs) -> float:
@@ -177,7 +188,7 @@ def compute(inputs: UnitEconInputs) -> UnitEconOutputs:
     ltv_cac = compute_ltv_cac_ratio(inputs)
     payback = compute_payback_months(inputs)
     disc_ltv = compute_discounted_ltv(inputs)
-    disc_ltv_cac = (disc_ltv / inputs.cac) if inputs.cac > 0 else float("inf")
+    disc_ltv_cac = (disc_ltv / inputs.blended_cac) if inputs.blended_cac > 0 else float("inf")
 
     outputs = UnitEconOutputs(
         contribution_margin_per_order=cm_order,
@@ -198,9 +209,17 @@ def compute(inputs: UnitEconInputs) -> UnitEconOutputs:
 
 
 def inputs_from_dict(d: dict) -> UnitEconInputs:
-    """Build UnitEconInputs from a flat dictionary (e.g. loaded from JSON)."""
+    """Build UnitEconInputs from a dictionary (e.g. loaded from JSON).
+
+    Supports both new ``channels`` format and legacy flat ``cac`` field.
+    """
+    if "channels" in d:
+        channels = d["channels"]
+    elif "cac" in d:
+        channels = [{"name": "Blended", "cac": float(d["cac"]), "pct_of_new_customers": 1.0}]
+    else:
+        channels = []
     return UnitEconInputs(
-        cac=float(d["cac"]),
         aov=float(d["aov"]),
         orders_per_month=float(d["orders_per_month"]),
         gross_margin_pct=float(d["gross_margin_pct"]),
@@ -208,6 +227,7 @@ def inputs_from_dict(d: dict) -> UnitEconInputs:
         monthly_churn_rate=float(d["monthly_churn_rate"]),
         monthly_fixed_costs=float(d.get("monthly_fixed_costs", 0)),
         annual_discount_rate=float(d.get("annual_discount_rate", 0.10)),
+        channels=channels,
     )
 
 
@@ -239,7 +259,10 @@ def cli_main(argv: list | None = None) -> None:
     print("=" * 50)
     print("  UNIT ECONOMICS SUMMARY")
     print("=" * 50)
-    print(f"  CAC:                     ${inputs.cac:,.2f}")
+    print(f"  Blended CAC:             ${inputs.blended_cac:,.2f}")
+    if inputs.channels:
+        for ch in inputs.channels:
+            print(f"    {ch['name']:20s}  CAC ${ch['cac']:>8,.2f}  ({ch['pct_of_new_customers']:.0%})")
     print(f"  AOV:                     ${inputs.aov:,.2f}")
     print(f"  Orders/month:            {inputs.orders_per_month:.1f}")
     print(f"  Gross margin:            {inputs.gross_margin_pct:.0%}")

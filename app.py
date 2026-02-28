@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -30,6 +31,7 @@ st.set_page_config(
 
 PRIMARY = "#3B82F6"
 RED = "#EF4444"
+YELLOW = "#F59E0B"
 GREEN = "#10B981"
 INDIGO = "#6366F1"
 PLOTLY_TEMPLATE = "plotly_white"
@@ -57,9 +59,57 @@ with st.sidebar:
     preset = st.selectbox("Load preset", list(PRESETS.keys()))
     defaults = load_preset(preset)
 
+    st.subheader("Acquisition Channels")
+
+    default_channels = defaults.get("channels", [
+        {"name": "Paid", "cac": 25.0, "pct_of_new_customers": 0.60},
+        {"name": "Organic", "cac": 8.0, "pct_of_new_customers": 0.30},
+        {"name": "Referral", "cac": 4.0, "pct_of_new_customers": 0.10},
+    ])
+
+    channel_df = pd.DataFrame(default_channels)
+    channel_df["pct_of_new_customers"] = channel_df["pct_of_new_customers"] * 100
+    channel_df = channel_df.rename(columns={
+        "name": "Channel",
+        "cac": "CAC ($)",
+        "pct_of_new_customers": "% of New Cust.",
+    })
+
+    edited_df = st.data_editor(
+        channel_df,
+        num_rows="dynamic",
+        column_config={
+            "Channel": st.column_config.TextColumn(required=True),
+            "CAC ($)": st.column_config.NumberColumn(min_value=0.0, format="%.2f", required=True),
+            "% of New Cust.": st.column_config.NumberColumn(min_value=0.0, max_value=100.0, format="%.1f", required=True),
+        },
+        hide_index=True,
+        key=f"channel_editor_{preset}",
+    )
+
+    channels = []
+    for _, row in edited_df.iterrows():
+        name = row.get("Channel", "")
+        cac_val = row.get("CAC ($)", 0.0)
+        pct_val = row.get("% of New Cust.", 0.0)
+        if pd.isna(name) or str(name).strip() == "":
+            continue
+        channels.append({
+            "name": str(name),
+            "cac": float(cac_val) if not pd.isna(cac_val) else 0.0,
+            "pct_of_new_customers": (float(pct_val) if not pd.isna(pct_val) else 0.0) / 100.0,
+        })
+
+    total_pct = sum(ch["pct_of_new_customers"] for ch in channels)
+    if abs(total_pct - 1.0) > 0.001:
+        st.warning(f"Channel percentages sum to {total_pct * 100:.1f}% — must equal 100%")
+
+    blended_cac = sum(ch["cac"] * ch["pct_of_new_customers"] for ch in channels) if channels else 0.0
+    st.caption(f"**Blended CAC: ${blended_cac:,.2f}**")
+
+    st.markdown("---")
     st.subheader("Model Inputs")
 
-    cac = st.number_input("Customer Acquisition Cost ($)", min_value=0.0, value=defaults["cac"], step=1.0, format="%.2f")
     aov = st.number_input("Avg Order Value ($)", min_value=0.01, value=defaults["aov"], step=1.0, format="%.2f")
     orders_per_month = st.number_input("Orders per Month", min_value=0.1, value=defaults["orders_per_month"], step=0.1, format="%.1f")
     gross_margin_pct = st.slider("Gross Margin %", min_value=0, max_value=100, value=int(defaults["gross_margin_pct"] * 100)) / 100.0
@@ -73,7 +123,6 @@ with st.sidebar:
     annual_discount_rate = discount_rate_pct / 100.0
 
 inputs = UnitEconInputs(
-    cac=cac,
     aov=aov,
     orders_per_month=orders_per_month,
     gross_margin_pct=gross_margin_pct,
@@ -81,6 +130,7 @@ inputs = UnitEconInputs(
     monthly_churn_rate=monthly_churn,
     monthly_fixed_costs=monthly_fixed,
     annual_discount_rate=annual_discount_rate,
+    channels=channels,
 )
 
 # ── Compute ───────────────────────────────────────────────────────────────────
@@ -247,6 +297,50 @@ with tab_cohort:
             height=350,
         )
         st.plotly_chart(fig_rev, use_container_width=True)
+
+    # ── Per-channel LTV:CAC bar chart ────────────────────────────────────────
+    if inputs.channels:
+        st.markdown("### LTV : CAC by Channel")
+
+        ch_names = []
+        ch_ratios = []
+        ch_colors = []
+        for ch in inputs.channels:
+            ratio = outputs.ltv / ch["cac"] if ch["cac"] > 0 else float("inf")
+            ch_names.append(ch["name"])
+            ch_ratios.append(ratio)
+            if ratio >= 3.0:
+                ch_colors.append(GREEN)
+            elif ratio >= 1.0:
+                ch_colors.append(YELLOW)
+            else:
+                ch_colors.append(RED)
+
+        fig_ch = go.Figure()
+        fig_ch.add_trace(go.Bar(
+            y=ch_names,
+            x=ch_ratios,
+            orientation="h",
+            marker_color=ch_colors,
+            text=[f"{r:.2f}x" for r in ch_ratios],
+            textposition="outside",
+        ))
+        fig_ch.add_vline(
+            x=3.0, line_dash="dot", line_color=GREEN, line_width=1,
+            annotation_text="3x", annotation_position="top",
+        )
+        fig_ch.add_vline(
+            x=1.0, line_dash="dot", line_color=RED, line_width=1,
+            annotation_text="1x", annotation_position="top",
+        )
+        fig_ch.update_layout(
+            title="LTV : CAC Ratio by Acquisition Channel",
+            xaxis_title="LTV : CAC",
+            yaxis_title="",
+            template=PLOTLY_TEMPLATE,
+            height=max(250, len(inputs.channels) * 60 + 100),
+        )
+        st.plotly_chart(fig_ch, use_container_width=True)
 
 # ── Tab 2: Sensitivity Analysis ──────────────────────────────────────────────
 

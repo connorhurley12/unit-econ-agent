@@ -25,7 +25,7 @@ def build_cohort_table(inputs: UnitEconInputs, n_months: int = 36) -> pd.DataFra
     initial_customers = 1_000
     cm_per_order = compute_contribution_margin_per_order(inputs)
     retention = 1.0 - inputs.monthly_churn_rate
-    total_cac = initial_customers * inputs.cac
+    total_cac = initial_customers * inputs.blended_cac
 
     months = np.arange(1, n_months + 1)
     survivors = initial_customers * (retention ** months)
