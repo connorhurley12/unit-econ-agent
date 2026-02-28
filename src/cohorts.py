@@ -22,6 +22,7 @@ def build_cohort_table(inputs: UnitEconInputs, n_months: int = 36) -> pd.DataFra
       - monthly_revenue: survivors × orders_per_month × ARPU(month)
       - monthly_contribution: survivors × (ARPU(month) × GM% − VC) × orders/mo
       - cumulative_contribution: running sum of monthly_contribution
+      - discounted_cumulative_contribution: running sum discounted to present value
       - cac_threshold: total CAC spent on initial cohort (flat line)
     """
     initial_customers = 1_000
@@ -42,6 +43,11 @@ def build_cohort_table(inputs: UnitEconInputs, n_months: int = 36) -> pd.DataFra
     monthly_contribution = survivors * contribution_per_order * inputs.orders_per_month
     cumulative_contribution = np.cumsum(monthly_contribution)
 
+    monthly_rate = (1 + inputs.annual_discount_rate) ** (1 / 12) - 1
+    discount_factors = (1 + monthly_rate) ** months
+    discounted_monthly_contribution = monthly_contribution / discount_factors
+    discounted_cumulative_contribution = np.cumsum(discounted_monthly_contribution)
+
     return pd.DataFrame({
         "month": months,
         "survivors": np.round(survivors, 1),
@@ -49,6 +55,7 @@ def build_cohort_table(inputs: UnitEconInputs, n_months: int = 36) -> pd.DataFra
         "monthly_revenue": np.round(monthly_revenue, 2),
         "monthly_contribution": np.round(monthly_contribution, 2),
         "cumulative_contribution": np.round(cumulative_contribution, 2),
+        "discounted_cumulative_contribution": np.round(discounted_cumulative_contribution, 2),
         "cac_threshold": total_cac,
     })
 
