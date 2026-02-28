@@ -22,6 +22,7 @@ class UnitEconInputs:
     variable_cost_per_order: float  # Variable cost per order ($)
     monthly_churn_rate: float     # Monthly churn as a decimal (e.g. 0.08)
     monthly_fixed_costs: float = 0.0  # Monthly fixed overhead ($)
+    monthly_arpu_growth_rate: float = 0.0  # MoM % growth in ARPU from upsell/cross-sell, e.g. 0.02 = 2%
     annual_discount_rate: float = 0.10  # Cost of capital / hurdle rate
 
 
@@ -60,11 +61,25 @@ def compute_monthly_contribution(inputs: UnitEconInputs) -> float:
 
 
 def compute_ltv(inputs: UnitEconInputs) -> float:
-    """LTV = monthly_contribution × (1 / churn_rate)."""
+    """
+    LTV with optional expansion revenue (Skok formula).
+
+    If monthly_arpu_growth_rate == 0: LTV = a / c  (simple formula)
+    If monthly_arpu_growth_rate >  0: LTV = a/c + m/c²  (linear expansion)
+
+    Where:
+      a = monthly contribution per customer (initial)
+      m = a × monthly_arpu_growth_rate  (monthly $ growth in contribution)
+      c = monthly churn rate
+    """
     mc = compute_monthly_contribution(inputs)
     if inputs.monthly_churn_rate <= 0:
         return float("inf")
-    return mc * (1.0 / inputs.monthly_churn_rate)
+    c = inputs.monthly_churn_rate
+    if inputs.monthly_arpu_growth_rate > 0:
+        m = mc * inputs.monthly_arpu_growth_rate
+        return mc / c + m / (c ** 2)
+    return mc / c
 
 
 def compute_ltv_cac_ratio(inputs: UnitEconInputs) -> float:
@@ -106,6 +121,13 @@ def compute_discounted_ltv(inputs: UnitEconInputs) -> float:
 def compute_health_flags(inputs: UnitEconInputs, outputs: UnitEconOutputs) -> List[HealthFlag]:
     """Generate severity flags based on thresholds."""
     flags: List[HealthFlag] = []
+
+    # Positive signal: negative churn achieved
+    if inputs.monthly_arpu_growth_rate > inputs.monthly_churn_rate:
+        flags.append(HealthFlag(
+            "positive",
+            f"Negative churn achieved — expansion revenue ({inputs.monthly_arpu_growth_rate:.1%}/mo) outpaces churn ({inputs.monthly_churn_rate:.1%}/mo)",
+        ))
 
     if outputs.ltv_cac_ratio < 1.0:
         flags.append(HealthFlag("critical", f"LTV:CAC ratio is {outputs.ltv_cac_ratio:.2f} (< 1.0) — you lose money on every customer"))
@@ -207,6 +229,7 @@ def inputs_from_dict(d: dict) -> UnitEconInputs:
         variable_cost_per_order=float(d["variable_cost_per_order"]),
         monthly_churn_rate=float(d["monthly_churn_rate"]),
         monthly_fixed_costs=float(d.get("monthly_fixed_costs", 0)),
+        monthly_arpu_growth_rate=float(d.get("monthly_arpu_growth_rate", 0)),
         annual_discount_rate=float(d.get("annual_discount_rate", 0.10)),
     )
 
