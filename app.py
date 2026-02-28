@@ -16,6 +16,14 @@ from src.health import (
     sort_flags,
 )
 from src.model import UnitEconInputs, compute
+from src.comparison import (
+    COLOR_BG_HEX,
+    COLOR_HEX,
+    build_comparison_rows,
+    cell_color,
+    format_value,
+    generate_verdict,
+)
 from src.sensitivity import LEVERS, sweep_lever, tornado_data
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -149,9 +157,10 @@ if monthly_arpu_growth > 0:
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
 
-tab_cohort, tab_sensitivity, tab_export = st.tabs([
+tab_cohort, tab_sensitivity, tab_comparison, tab_export = st.tabs([
     "Cohort LTV Curve",
     "Sensitivity Analysis",
+    "⚖️ Segment Comparison",
     "Export",
 ])
 
@@ -326,7 +335,127 @@ with tab_sensitivity:
     )
     st.plotly_chart(fig_sweep, use_container_width=True)
 
-# ── Tab 3: Export ─────────────────────────────────────────────────────────────
+# ── Tab 3: Segment Comparison ────────────────────────────────────────────
+
+with tab_comparison:
+    st.subheader("Segment Comparison")
+    st.caption("Compare two customer segments side by side. Each segment is computed independently.")
+
+    col_a, col_b = st.columns(2)
+
+    with col_a:
+        st.markdown("#### Segment A")
+        seg_a_cac = st.number_input("CAC ($)", min_value=0.0, value=inputs.cac, step=1.0, format="%.2f", key="seg_a_cac")
+        seg_a_aov = st.number_input("AOV ($)", min_value=0.01, value=inputs.aov, step=1.0, format="%.2f", key="seg_a_aov")
+        seg_a_orders = st.number_input("Orders / month", min_value=0.1, value=inputs.orders_per_month, step=0.1, format="%.1f", key="seg_a_orders")
+        seg_a_gm = st.slider("Gross Margin %", min_value=0, max_value=100, value=int(inputs.gross_margin_pct * 100), key="seg_a_gm") / 100.0
+        seg_a_vc = st.number_input("Variable Cost / Order ($)", min_value=0.0, value=inputs.variable_cost_per_order, step=0.10, format="%.2f", key="seg_a_vc")
+        seg_a_churn = st.slider("Monthly Churn %", min_value=0, max_value=50, value=int(inputs.monthly_churn_rate * 100), key="seg_a_churn") / 100.0
+
+    with col_b:
+        st.markdown("#### Segment B")
+        # Default B to a contrasting profile: higher CAC, lower churn (enterprise-like)
+        default_b_cac = round(inputs.cac * 2.5, 2)
+        default_b_aov = round(inputs.aov * 1.8, 2)
+        default_b_churn = max(1, int(inputs.monthly_churn_rate * 100) // 2)
+        seg_b_cac = st.number_input("CAC ($)", min_value=0.0, value=default_b_cac, step=1.0, format="%.2f", key="seg_b_cac")
+        seg_b_aov = st.number_input("AOV ($)", min_value=0.01, value=default_b_aov, step=1.0, format="%.2f", key="seg_b_aov")
+        seg_b_orders = st.number_input("Orders / month", min_value=0.1, value=inputs.orders_per_month, step=0.1, format="%.1f", key="seg_b_orders")
+        seg_b_gm = st.slider("Gross Margin %", min_value=0, max_value=100, value=int(inputs.gross_margin_pct * 100), key="seg_b_gm") / 100.0
+        seg_b_vc = st.number_input("Variable Cost / Order ($)", min_value=0.0, value=inputs.variable_cost_per_order, step=0.10, format="%.2f", key="seg_b_vc")
+        seg_b_churn = st.slider("Monthly Churn %", min_value=0, max_value=50, value=default_b_churn, key="seg_b_churn") / 100.0
+
+    # Build independent inputs for each segment
+    seg_a_inputs = UnitEconInputs(
+        cac=seg_a_cac, aov=seg_a_aov, orders_per_month=seg_a_orders,
+        gross_margin_pct=seg_a_gm, variable_cost_per_order=seg_a_vc,
+        monthly_churn_rate=seg_a_churn,
+    )
+    seg_b_inputs = UnitEconInputs(
+        cac=seg_b_cac, aov=seg_b_aov, orders_per_month=seg_b_orders,
+        gross_margin_pct=seg_b_gm, variable_cost_per_order=seg_b_vc,
+        monthly_churn_rate=seg_b_churn,
+    )
+
+    seg_a_out = compute(seg_a_inputs)
+    seg_b_out = compute(seg_b_inputs)
+
+    # ── Comparison table ──────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### Metric Comparison")
+
+    rows = build_comparison_rows(seg_a_out, seg_b_out)
+    # Inject actual CAC values (since we have them directly)
+    for row in rows:
+        if row.label == "CAC":
+            row.value_a = seg_a_cac
+            row.value_b = seg_b_cac
+
+    header = "| Metric | Segment A | Segment B |"
+    sep = "|:-------|:---------:|:---------:|"
+    table_lines = [header, sep]
+    for row in rows:
+        val_a = format_value(row.fmt, row.value_a)
+        val_b = format_value(row.fmt, row.value_b)
+        color_a = cell_color(row.label, row.value_a)
+        color_b = cell_color(row.label, row.value_b)
+        hex_a = COLOR_HEX[color_a]
+        hex_b = COLOR_HEX[color_b]
+        bg_a = COLOR_BG_HEX[color_a]
+        bg_b = COLOR_BG_HEX[color_b]
+        cell_a = f'<span style="color:{hex_a};background:{bg_a};padding:2px 8px;border-radius:4px;font-weight:600">{val_a}</span>'
+        cell_b = f'<span style="color:{hex_b};background:{bg_b};padding:2px 8px;border-radius:4px;font-weight:600">{val_b}</span>'
+        table_lines.append(f"| **{row.label}** | {cell_a} | {cell_b} |")
+
+    st.markdown("\n".join(table_lines), unsafe_allow_html=True)
+
+    # ── Grouped bar chart ─────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### Side-by-Side Metrics")
+
+    chart_metrics = ["LTV", "CAC", "LTV:CAC", "Payback (mo)", "CM / Order", "Health Score"]
+    vals_a = [seg_a_out.ltv, seg_a_cac, seg_a_out.ltv_cac_ratio, seg_a_out.payback_months, seg_a_out.contribution_margin_per_order, seg_a_out.health_score]
+    vals_b = [seg_b_out.ltv, seg_b_cac, seg_b_out.ltv_cac_ratio, seg_b_out.payback_months, seg_b_out.contribution_margin_per_order, seg_b_out.health_score]
+
+    # Cap infinite payback for display
+    vals_a = [v if v != float("inf") else 0 for v in vals_a]
+    vals_b = [v if v != float("inf") else 0 for v in vals_b]
+
+    fig_cmp = go.Figure()
+    fig_cmp.add_trace(go.Bar(
+        name="Segment A",
+        x=chart_metrics,
+        y=vals_a,
+        marker_color=PRIMARY,
+        text=[f"{v:,.1f}" for v in vals_a],
+        textposition="outside",
+    ))
+    fig_cmp.add_trace(go.Bar(
+        name="Segment B",
+        x=chart_metrics,
+        y=vals_b,
+        marker_color=INDIGO,
+        text=[f"{v:,.1f}" for v in vals_b],
+        textposition="outside",
+    ))
+    fig_cmp.update_layout(
+        barmode="group",
+        template=PLOTLY_TEMPLATE,
+        height=450,
+        yaxis_title="Value",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    st.plotly_chart(fig_cmp, use_container_width=True)
+
+    # ── Verdict ───────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### Verdict")
+
+    verdicts = generate_verdict(seg_a_inputs, seg_b_inputs, seg_a_out, seg_b_out)
+    for v in verdicts:
+        st.markdown(f"- {v}")
+
+# ── Tab 4: Export ─────────────────────────────────────────────────────────────
 
 with tab_export:
     st.subheader("Download Results")
