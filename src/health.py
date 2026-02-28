@@ -9,24 +9,27 @@ from src.model import HealthFlag
 
 # Color scheme per severity
 SEVERITY_COLORS: Dict[str, str] = {
+    "positive": "#10B981",  # green
     "critical": "#EF4444",  # red
     "warning": "#F59E0B",   # amber
     "watch": "#3B82F6",     # blue
 }
 
 SEVERITY_BG_COLORS: Dict[str, str] = {
+    "positive": "#D1FAE5",
     "critical": "#FEE2E2",
     "warning": "#FEF3C7",
     "watch": "#DBEAFE",
 }
 
 SEVERITY_ICONS: Dict[str, str] = {
+    "positive": "🟢",
     "critical": "🔴",
     "warning": "🟡",
     "watch": "🔵",
 }
 
-SEVERITY_ORDER = ["critical", "warning", "watch"]
+SEVERITY_ORDER = ["positive", "critical", "warning", "watch"]
 
 
 def sort_flags(flags: List[HealthFlag]) -> List[HealthFlag]:

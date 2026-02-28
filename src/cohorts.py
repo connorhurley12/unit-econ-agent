@@ -12,25 +12,34 @@ def build_cohort_table(inputs: UnitEconInputs, n_months: int = 36) -> pd.DataFra
     """
     Build a month-by-month cohort table starting with 1 000 customers.
 
+    When monthly_arpu_growth_rate > 0, ARPU compounds each month to model
+    expansion revenue from upsell/cross-sell.
+
     Columns:
       - month: 1..n_months
       - survivors: customers remaining (geometric churn)
       - survivor_pct: survivors / initial
-      - monthly_revenue: survivors × orders_per_month × AOV
-      - monthly_contribution: survivors × orders_per_month × contribution_margin
+      - monthly_revenue: survivors × orders_per_month × ARPU(month)
+      - monthly_contribution: survivors × (ARPU(month) × GM% − VC) × orders/mo
       - cumulative_contribution: running sum of monthly_contribution
       - cac_threshold: total CAC spent on initial cohort (flat line)
     """
     initial_customers = 1_000
-    cm_per_order = compute_contribution_margin_per_order(inputs)
     retention = 1.0 - inputs.monthly_churn_rate
     total_cac = initial_customers * inputs.cac
+    g = inputs.monthly_arpu_growth_rate
 
     months = np.arange(1, n_months + 1)
     survivors = initial_customers * (retention ** months)
     survivor_pct = survivors / initial_customers
-    monthly_revenue = survivors * inputs.orders_per_month * inputs.aov
-    monthly_contribution = survivors * inputs.orders_per_month * cm_per_order
+
+    # ARPU grows each month with expansion revenue
+    arpu = inputs.aov * ((1 + g) ** (months - 1))
+
+    monthly_revenue = survivors * inputs.orders_per_month * arpu
+    # Contribution = survivors × (ARPU × GM% − variable_cost) × orders/mo
+    contribution_per_order = arpu * inputs.gross_margin_pct - inputs.variable_cost_per_order
+    monthly_contribution = survivors * contribution_per_order * inputs.orders_per_month
     cumulative_contribution = np.cumsum(monthly_contribution)
 
     return pd.DataFrame({

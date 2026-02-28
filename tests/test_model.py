@@ -172,6 +172,67 @@ class TestHealthFlags:
         assert len(outputs.health_flags) > 0
 
 
+# ── Expansion revenue (Skok formula) ─────────────────────────────────────────
+
+class TestExpansionRevenue:
+    def test_zero_growth_uses_simple_formula(self, dark_store_inputs):
+        """With growth=0, LTV should match the simple a/c formula."""
+        ltv = compute_ltv(dark_store_inputs)
+        assert dark_store_inputs.monthly_arpu_growth_rate == 0.0
+        assert ltv == pytest.approx(210.00, abs=0.01)
+
+    def test_expansion_increases_ltv(self, dark_store_inputs):
+        """With ARPU growth > 0, LTV should be higher than the base case."""
+        from dataclasses import replace
+        base_ltv = compute_ltv(dark_store_inputs)
+        expanded = replace(dark_store_inputs, monthly_arpu_growth_rate=0.02)
+        expanded_ltv = compute_ltv(expanded)
+        assert expanded_ltv > base_ltv
+
+    def test_skok_formula_values(self):
+        """Verify the Skok formula: LTV = a/c + m/c^2."""
+        inputs = UnitEconInputs(
+            cac=100.0, aov=50.0, orders_per_month=1.0,
+            gross_margin_pct=0.80, variable_cost_per_order=0.0,
+            monthly_churn_rate=0.10, monthly_arpu_growth_rate=0.03,
+        )
+        # a = 50 * 0.80 * 1.0 = 40.0
+        # m = 40.0 * 0.03 = 1.2
+        # c = 0.10
+        # LTV = 40/0.10 + 1.2/0.01 = 400 + 120 = 520
+        assert compute_ltv(inputs) == pytest.approx(520.0, abs=0.01)
+
+    def test_negative_churn_flag_when_growth_exceeds_churn(self):
+        """When ARPU growth > churn, a positive 'negative churn' flag appears."""
+        inputs = UnitEconInputs(
+            cac=100.0, aov=50.0, orders_per_month=1.0,
+            gross_margin_pct=0.80, variable_cost_per_order=0.0,
+            monthly_churn_rate=0.05, monthly_arpu_growth_rate=0.08,
+        )
+        outputs = compute(inputs)
+        severities = [f.severity for f in outputs.health_flags]
+        assert "positive" in severities
+        messages = " ".join(f.message for f in outputs.health_flags)
+        assert "Negative churn achieved" in messages
+
+    def test_no_negative_churn_flag_when_growth_below_churn(self, dark_store_inputs):
+        """No positive flag when ARPU growth < churn."""
+        from dataclasses import replace
+        inputs = replace(dark_store_inputs, monthly_arpu_growth_rate=0.01)
+        outputs = compute(inputs)
+        severities = [f.severity for f in outputs.health_flags]
+        assert "positive" not in severities
+
+    def test_default_arpu_growth_is_zero(self):
+        """Default monthly_arpu_growth_rate should be 0."""
+        inputs = UnitEconInputs(
+            cac=18.0, aov=34.0, orders_per_month=2.8,
+            gross_margin_pct=0.30, variable_cost_per_order=4.20,
+            monthly_churn_rate=0.08,
+        )
+        assert inputs.monthly_arpu_growth_rate == 0.0
+
+
 # ── Full compute integration ─────────────────────────────────────────────────
 
 class TestCompute:
