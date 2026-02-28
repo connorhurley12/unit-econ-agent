@@ -13,7 +13,7 @@ from src.model import UnitEconInputs, compute_ltv_cac_ratio
 
 # Mapping of lever names to their UnitEconInputs field names
 LEVERS: Dict[str, str] = {
-    "CAC": "cac",
+    "CAC": "blended_cac",
     "AOV": "aov",
     "Orders/mo": "orders_per_month",
     "Gross Margin": "gross_margin_pct",
@@ -24,6 +24,12 @@ LEVERS: Dict[str, str] = {
 
 def _tweak_input(inputs: UnitEconInputs, field: str, pct_change: float) -> UnitEconInputs:
     """Return a copy of inputs with one field adjusted by pct_change (e.g. 0.10 = +10%)."""
+    if field == "blended_cac":
+        new_channels = [
+            {**ch, "cac": ch["cac"] * (1 + pct_change)}
+            for ch in inputs.channels
+        ]
+        return replace(inputs, channels=new_channels)
     current = getattr(inputs, field)
     new_val = current * (1 + pct_change)
     return replace(inputs, **{field: new_val})
@@ -44,7 +50,7 @@ def tornado_data(inputs: UnitEconInputs, improvement_pct: float = 0.10) -> pd.Da
 
     for label, field in LEVERS.items():
         # For cost levers, improvement = reduction
-        direction = -1.0 if field in ("cac", "variable_cost_per_order", "monthly_churn_rate") else 1.0
+        direction = -1.0 if field in ("blended_cac", "variable_cost_per_order", "monthly_churn_rate") else 1.0
         tweaked = _tweak_input(inputs, field, direction * improvement_pct)
         improved = compute_ltv_cac_ratio(tweaked)
         delta = improved - baseline

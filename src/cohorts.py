@@ -27,6 +27,7 @@ def build_cohort_table(inputs: UnitEconInputs, n_months: int = 36) -> pd.DataFra
     """
     initial_customers = 1_000
     retention = 1.0 - inputs.monthly_churn_rate
+    total_cac = initial_customers * inputs.blended_cac
     total_cac = initial_customers * inputs.cac
     g = inputs.monthly_arpu_growth_rate
 
