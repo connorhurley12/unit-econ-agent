@@ -1,0 +1,11 @@
+{
+  "name": "Dark Store Delivery",
+  "description": "Quick-commerce dark store unit economics",
+  "cac": 18.00,
+  "aov": 34.00,
+  "orders_per_month": 2.8,
+  "gross_margin_pct": 0.30,
+  "variable_cost_per_order": 4.20,
+  "monthly_churn_rate": 0.08,
+  "monthly_fixed_costs": 12000.00
+}
