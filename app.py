@@ -129,6 +129,7 @@ inputs = UnitEconInputs(
     variable_cost_per_order=variable_cost,
     monthly_churn_rate=monthly_churn,
     monthly_fixed_costs=monthly_fixed,
+    monthly_arpu_growth_rate=monthly_arpu_growth,
     annual_discount_rate=annual_discount_rate,
     channels=channels,
 )
@@ -193,6 +194,9 @@ if flags:
             unsafe_allow_html=True,
         )
 
+if monthly_arpu_growth > 0:
+    st.info("Negative churn active — expansion revenue is outpacing lost customers")
+
 # ── Tabs ──────────────────────────────────────────────────────────────────────
 
 tab_cohort, tab_sensitivity, tab_export = st.tabs([
@@ -240,6 +244,20 @@ with tab_cohort:
             annotation_text=f"Payback: month {payback_month}",
             annotation_position="top right",
             annotation_font_color=GREEN,
+        )
+    if inputs.monthly_arpu_growth_rate > 0:
+        # Annotate the expansion effect on the curve
+        mid_month = len(cohort_df) // 2
+        fig_ltv.add_annotation(
+            x=cohort_df["month"].iloc[mid_month],
+            y=cohort_df["cumulative_contribution"].iloc[mid_month],
+            text=f"Expansion: +{inputs.monthly_arpu_growth_rate:.0%}/mo ARPU growth",
+            showarrow=True,
+            arrowhead=2,
+            arrowcolor=GREEN,
+            font=dict(color=GREEN, size=12),
+            ax=40,
+            ay=-40,
         )
     fig_ltv.update_layout(
         title="Cumulative Contribution vs CAC (1 000 customer cohort)",
