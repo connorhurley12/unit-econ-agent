@@ -15,7 +15,7 @@ from src.health import (
     health_score_color,
     sort_flags,
 )
-from src.model import UnitEconInputs, compute
+from src.model import UnitEconInputs, compute, compute_channel_ltv_cac_ratios
 from src.sensitivity import LEVERS, sweep_lever, tornado_data
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -32,6 +32,7 @@ PRIMARY = "#3B82F6"
 RED = "#EF4444"
 GREEN = "#10B981"
 INDIGO = "#6366F1"
+AMBER = "#F59E0B"
 PLOTLY_TEMPLATE = "plotly_white"
 
 # ── Example presets ───────────────────────────────────────────────────────────
@@ -57,9 +58,54 @@ with st.sidebar:
     preset = st.selectbox("Load preset", list(PRESETS.keys()))
     defaults = load_preset(preset)
 
+    # ── Channel CAC inputs ────────────────────────────────────────────────
+    st.subheader("Acquisition Channels")
+
+    default_channels = defaults.get("channels", [
+        {"name": "Blended", "cac": defaults.get("cac", 18.0), "pct_of_new_customers": 1.0},
+    ])
+
+    if "channels" not in st.session_state or st.session_state.get("_last_preset") != preset:
+        st.session_state.channels = [dict(ch) for ch in default_channels]
+        st.session_state._last_preset = preset
+
+    channels = st.session_state.channels
+
+    # Render each channel row
+    to_remove = None
+    for i, ch in enumerate(channels):
+        cols = st.columns([3, 2, 2, 1])
+        with cols[0]:
+            ch["name"] = st.text_input("Name", value=ch["name"], key=f"ch_name_{i}", label_visibility="collapsed")
+        with cols[1]:
+            ch["cac"] = st.number_input("CAC ($)", min_value=0.0, value=float(ch["cac"]), step=1.0, format="%.2f", key=f"ch_cac_{i}", label_visibility="collapsed")
+        with cols[2]:
+            ch["pct_of_new_customers"] = st.number_input("% New", min_value=0.0, max_value=1.0, value=float(ch["pct_of_new_customers"]), step=0.05, format="%.2f", key=f"ch_pct_{i}", label_visibility="collapsed")
+        with cols[3]:
+            if len(channels) > 1 and st.button("✕", key=f"ch_rm_{i}"):
+                to_remove = i
+
+    if to_remove is not None:
+        channels.pop(to_remove)
+        st.rerun()
+
+    if st.button("+ Add channel"):
+        channels.append({"name": f"Channel {len(channels)+1}", "cac": 10.0, "pct_of_new_customers": 0.0})
+        st.rerun()
+
+    # Validation: percentages must sum to 100%
+    pct_sum = sum(ch["pct_of_new_customers"] for ch in channels)
+    blended_cac = sum(ch["cac"] * ch["pct_of_new_customers"] for ch in channels)
+    st.caption(f"Blended CAC: **${blended_cac:,.2f}**  |  % sum: **{pct_sum:.0%}**")
+
+    if abs(pct_sum - 1.0) > 0.001:
+        st.warning(f"Channel percentages sum to {pct_sum:.0%} — must equal 100%")
+
+    st.markdown("---")
+
+    # ── Other model inputs ────────────────────────────────────────────────
     st.subheader("Model Inputs")
 
-    cac = st.number_input("Customer Acquisition Cost ($)", min_value=0.0, value=defaults["cac"], step=1.0, format="%.2f")
     aov = st.number_input("Avg Order Value ($)", min_value=0.01, value=defaults["aov"], step=1.0, format="%.2f")
     orders_per_month = st.number_input("Orders per Month", min_value=0.1, value=defaults["orders_per_month"], step=0.1, format="%.1f")
     gross_margin_pct = st.slider("Gross Margin %", min_value=0, max_value=100, value=int(defaults["gross_margin_pct"] * 100)) / 100.0
@@ -68,7 +114,7 @@ with st.sidebar:
     monthly_fixed = st.number_input("Monthly Fixed Costs ($)", min_value=0.0, value=defaults.get("monthly_fixed_costs", 0.0), step=100.0, format="%.0f")
 
 inputs = UnitEconInputs(
-    cac=cac,
+    channels=[dict(ch) for ch in channels],
     aov=aov,
     orders_per_month=orders_per_month,
     gross_margin_pct=gross_margin_pct,
@@ -176,7 +222,7 @@ with tab_cohort:
             fill="tozeroy",
             name="Survivor %",
             line=dict(color=INDIGO),
-            fillcolor=f"rgba(99, 102, 241, 0.25)",
+            fillcolor="rgba(99, 102, 241, 0.25)",
         ))
         fig_surv.update_layout(
             title="Cohort Survival Curve",
@@ -204,6 +250,44 @@ with tab_cohort:
             height=350,
         )
         st.plotly_chart(fig_rev, use_container_width=True)
+
+    # ── Per-channel LTV:CAC bar chart ─────────────────────────────────────
+    st.markdown("### LTV:CAC by Channel")
+
+    channel_ratios = compute_channel_ltv_cac_ratios(inputs)
+    ch_names = [r["name"] for r in channel_ratios]
+    ch_ratios = [r["ltv_cac_ratio"] for r in channel_ratios]
+    ch_colors = []
+    for r in ch_ratios:
+        if r >= 3.0:
+            ch_colors.append(GREEN)
+        elif r >= 1.0:
+            ch_colors.append(AMBER)
+        else:
+            ch_colors.append(RED)
+
+    fig_ch = go.Figure()
+    fig_ch.add_trace(go.Bar(
+        x=ch_ratios,
+        y=ch_names,
+        orientation="h",
+        marker_color=ch_colors,
+        text=[f"{r:.1f}x" for r in ch_ratios],
+        textposition="outside",
+    ))
+    # Reference lines at 1x and 3x
+    fig_ch.add_vline(x=1.0, line_dash="dash", line_color=RED, line_width=1,
+                     annotation_text="1x", annotation_position="top")
+    fig_ch.add_vline(x=3.0, line_dash="dash", line_color=GREEN, line_width=1,
+                     annotation_text="3x", annotation_position="top")
+    fig_ch.update_layout(
+        title="LTV:CAC Ratio by Acquisition Channel",
+        xaxis_title="LTV:CAC Ratio",
+        yaxis_title="",
+        template=PLOTLY_TEMPLATE,
+        height=max(200, 60 * len(ch_names) + 100),
+    )
+    st.plotly_chart(fig_ch, use_container_width=True)
 
 # ── Tab 2: Sensitivity Analysis ──────────────────────────────────────────────
 

@@ -7,6 +7,7 @@ import pytest
 from src.model import (
     UnitEconInputs,
     compute,
+    compute_channel_ltv_cac_ratios,
     compute_contribution_margin_per_order,
     compute_health_flags,
     compute_ltv,
@@ -16,13 +17,27 @@ from src.model import (
 )
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _single_channel(cac: float) -> list:
+    """Create a single-channel list for backward-compatible test setups."""
+    return [{"name": "Blended", "cac": cac, "pct_of_new_customers": 1.0}]
+
+
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 @pytest.fixture
 def dark_store_inputs():
-    """Dark store example: CAC $18, AOV $34, 2.8 orders/mo, 30% GM, $4.20 VC, 8% churn."""
+    """Dark store example with multi-channel CAC.
+
+    Blended CAC = 25×0.60 + 8×0.30 + 4×0.10 = 17.80
+    """
     return UnitEconInputs(
-        cac=18.0,
+        channels=[
+            {"name": "Paid", "cac": 25.0, "pct_of_new_customers": 0.60},
+            {"name": "Organic", "cac": 8.0, "pct_of_new_customers": 0.30},
+            {"name": "Referral", "cac": 4.0, "pct_of_new_customers": 0.10},
+        ],
         aov=34.0,
         orders_per_month=2.8,
         gross_margin_pct=0.30,
@@ -36,7 +51,7 @@ def dark_store_inputs():
 def bad_economics_inputs():
     """Inputs where CAC >> LTV (very high CAC, thin margins, high churn)."""
     return UnitEconInputs(
-        cac=500.0,
+        channels=_single_channel(500.0),
         aov=20.0,
         orders_per_month=1.0,
         gross_margin_pct=0.15,
@@ -50,7 +65,7 @@ def bad_economics_inputs():
 def high_churn_inputs():
     """Inputs with very high monthly churn (> 10%)."""
     return UnitEconInputs(
-        cac=50.0,
+        channels=_single_channel(50.0),
         aov=40.0,
         orders_per_month=2.0,
         gross_margin_pct=0.40,
@@ -58,6 +73,18 @@ def high_churn_inputs():
         monthly_churn_rate=0.15,
         monthly_fixed_costs=8000.0,
     )
+
+
+# ── Blended CAC ──────────────────────────────────────────────────────────────
+
+class TestBlendedCAC:
+    def test_blended_cac_weighted_average(self, dark_store_inputs):
+        # 25×0.60 + 8×0.30 + 4×0.10 = 15 + 2.4 + 0.4 = 17.80
+        assert dark_store_inputs.blended_cac == pytest.approx(17.80, abs=0.01)
+
+    def test_single_channel_blended_equals_cac(self):
+        inputs = UnitEconInputs(channels=_single_channel(42.0))
+        assert inputs.blended_cac == pytest.approx(42.0, abs=0.01)
 
 
 # ── Contribution margin ──────────────────────────────────────────────────────
@@ -96,7 +123,8 @@ class TestLTV:
 
     def test_zero_churn_gives_infinite_ltv(self):
         inputs = UnitEconInputs(
-            cac=18.0, aov=34.0, orders_per_month=2.8,
+            channels=_single_channel(18.0),
+            aov=34.0, orders_per_month=2.8,
             gross_margin_pct=0.30, variable_cost_per_order=4.20,
             monthly_churn_rate=0.0,
         )
@@ -112,8 +140,8 @@ class TestLTVCACRatio:
 
     def test_dark_store_ratio(self, dark_store_inputs):
         ratio = compute_ltv_cac_ratio(dark_store_inputs)
-        # 210 / 18 = 11.6667
-        assert ratio == pytest.approx(11.667, abs=0.01)
+        # 210 / 17.80 ≈ 11.7978
+        assert ratio == pytest.approx(11.798, abs=0.01)
 
     def test_bad_economics_ratio_below_one(self, bad_economics_inputs):
         ratio = compute_ltv_cac_ratio(bad_economics_inputs)
@@ -129,8 +157,8 @@ class TestPayback:
 
     def test_dark_store_payback(self, dark_store_inputs):
         pb = compute_payback_months(dark_store_inputs)
-        # 18 / 16.80 ≈ 1.07
-        assert pb == pytest.approx(1.07, abs=0.01)
+        # 17.80 / 16.80 ≈ 1.06
+        assert pb == pytest.approx(1.06, abs=0.01)
 
 
 # ── Health score ──────────────────────────────────────────────────────────────
@@ -170,6 +198,25 @@ class TestHealthFlags:
     def test_bad_economics_has_flags(self, bad_economics_inputs):
         outputs = compute(bad_economics_inputs)
         assert len(outputs.health_flags) > 0
+
+
+# ── Channel LTV:CAC ratios ───────────────────────────────────────────────────
+
+class TestChannelLTVCAC:
+    def test_channel_ratios_all_positive(self, dark_store_inputs):
+        ratios = compute_channel_ltv_cac_ratios(dark_store_inputs)
+        for r in ratios:
+            assert r["ltv_cac_ratio"] > 0
+
+    def test_channel_count_matches(self, dark_store_inputs):
+        ratios = compute_channel_ltv_cac_ratios(dark_store_inputs)
+        assert len(ratios) == len(dark_store_inputs.channels)
+
+    def test_cheaper_channel_has_higher_ratio(self, dark_store_inputs):
+        ratios = compute_channel_ltv_cac_ratios(dark_store_inputs)
+        by_name = {r["name"]: r["ltv_cac_ratio"] for r in ratios}
+        # Referral ($4) should have higher ratio than Paid ($25)
+        assert by_name["Referral"] > by_name["Paid"]
 
 
 # ── Full compute integration ─────────────────────────────────────────────────

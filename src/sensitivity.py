@@ -11,9 +11,10 @@ import pandas as pd
 from src.model import UnitEconInputs, compute_ltv_cac_ratio
 
 
-# Mapping of lever names to their UnitEconInputs field names
+# Mapping of lever names to their UnitEconInputs field names.
+# "blended_cac" is a virtual lever — scales all channel CACs proportionally.
 LEVERS: Dict[str, str] = {
-    "CAC": "cac",
+    "CAC": "blended_cac",
     "AOV": "aov",
     "Orders/mo": "orders_per_month",
     "Gross Margin": "gross_margin_pct",
@@ -24,6 +25,13 @@ LEVERS: Dict[str, str] = {
 
 def _tweak_input(inputs: UnitEconInputs, field: str, pct_change: float) -> UnitEconInputs:
     """Return a copy of inputs with one field adjusted by pct_change (e.g. 0.10 = +10%)."""
+    if field == "blended_cac":
+        # Scale all channel CACs proportionally so blended CAC shifts by pct_change
+        new_channels = [
+            {**ch, "cac": ch["cac"] * (1 + pct_change)}
+            for ch in inputs.channels
+        ]
+        return replace(inputs, channels=new_channels)
     current = getattr(inputs, field)
     new_val = current * (1 + pct_change)
     return replace(inputs, **{field: new_val})

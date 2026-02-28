@@ -15,13 +15,22 @@ from typing import List
 @dataclass
 class UnitEconInputs:
     """All inputs needed for the unit economics model."""
-    cac: float                    # Customer acquisition cost ($)
-    aov: float                    # Average order value ($)
-    orders_per_month: float       # Orders per customer per month
-    gross_margin_pct: float       # Gross margin as a decimal (e.g. 0.30)
-    variable_cost_per_order: float  # Variable cost per order ($)
-    monthly_churn_rate: float     # Monthly churn as a decimal (e.g. 0.08)
-    monthly_fixed_costs: float = 0.0  # Monthly fixed overhead ($)
+    channels: List[dict] = field(default_factory=lambda: [
+        {"name": "Paid", "cac": 25.0, "pct_of_new_customers": 0.60},
+        {"name": "Organic", "cac": 8.0, "pct_of_new_customers": 0.30},
+        {"name": "Referral", "cac": 4.0, "pct_of_new_customers": 0.10},
+    ])
+    aov: float = 34.0                    # Average order value ($)
+    orders_per_month: float = 2.8        # Orders per customer per month
+    gross_margin_pct: float = 0.30       # Gross margin as a decimal (e.g. 0.30)
+    variable_cost_per_order: float = 4.20  # Variable cost per order ($)
+    monthly_churn_rate: float = 0.08     # Monthly churn as a decimal (e.g. 0.08)
+    monthly_fixed_costs: float = 0.0     # Monthly fixed overhead ($)
+
+    @property
+    def blended_cac(self) -> float:
+        """Weighted average CAC across all channels."""
+        return sum(ch["cac"] * ch["pct_of_new_customers"] for ch in self.channels)
 
 
 @dataclass
@@ -65,19 +74,35 @@ def compute_ltv(inputs: UnitEconInputs) -> float:
 
 
 def compute_ltv_cac_ratio(inputs: UnitEconInputs) -> float:
-    """LTV : CAC ratio."""
+    """LTV : CAC ratio (uses blended CAC)."""
     ltv = compute_ltv(inputs)
-    if inputs.cac <= 0:
+    if inputs.blended_cac <= 0:
         return float("inf")
-    return ltv / inputs.cac
+    return ltv / inputs.blended_cac
 
 
 def compute_payback_months(inputs: UnitEconInputs) -> float:
-    """Payback period in months = CAC / monthly_contribution."""
+    """Payback period in months = blended_CAC / monthly_contribution."""
     mc = compute_monthly_contribution(inputs)
     if mc <= 0:
         return float("inf")
-    return inputs.cac / mc
+    return inputs.blended_cac / mc
+
+
+def compute_channel_ltv_cac_ratios(inputs: UnitEconInputs) -> List[dict]:
+    """Compute LTV:CAC ratio for each individual channel."""
+    ltv = compute_ltv(inputs)
+    results = []
+    for ch in inputs.channels:
+        cac = ch["cac"]
+        ratio = ltv / cac if cac > 0 else float("inf")
+        results.append({
+            "name": ch["name"],
+            "cac": cac,
+            "pct_of_new_customers": ch["pct_of_new_customers"],
+            "ltv_cac_ratio": ratio,
+        })
+    return results
 
 
 # ── Health scoring ────────────────────────────────────────────────────────────
@@ -173,9 +198,21 @@ def compute(inputs: UnitEconInputs) -> UnitEconOutputs:
 
 
 def inputs_from_dict(d: dict) -> UnitEconInputs:
-    """Build UnitEconInputs from a flat dictionary (e.g. loaded from JSON)."""
+    """Build UnitEconInputs from a dictionary (e.g. loaded from JSON).
+
+    Supports both formats:
+      - Legacy: {"cac": 18, ...} → single channel
+      - Multi-channel: {"channels": [...], ...}
+    """
+    if "channels" in d:
+        channels = d["channels"]
+    elif "cac" in d:
+        channels = [{"name": "Blended", "cac": float(d["cac"]), "pct_of_new_customers": 1.0}]
+    else:
+        channels = UnitEconInputs.channels  # default
+
     return UnitEconInputs(
-        cac=float(d["cac"]),
+        channels=channels,
         aov=float(d["aov"]),
         orders_per_month=float(d["orders_per_month"]),
         gross_margin_pct=float(d["gross_margin_pct"]),
@@ -213,7 +250,10 @@ def cli_main(argv: list | None = None) -> None:
     print("=" * 50)
     print("  UNIT ECONOMICS SUMMARY")
     print("=" * 50)
-    print(f"  CAC:                     ${inputs.cac:,.2f}")
+    print("  CHANNELS:")
+    for ch in inputs.channels:
+        print(f"    {ch['name']:20s}  CAC ${ch['cac']:,.2f}  ({ch['pct_of_new_customers']:.0%} of new)")
+    print(f"  Blended CAC:             ${inputs.blended_cac:,.2f}")
     print(f"  AOV:                     ${inputs.aov:,.2f}")
     print(f"  Orders/month:            {inputs.orders_per_month:.1f}")
     print(f"  Gross margin:            {inputs.gross_margin_pct:.0%}")

@@ -1,7 +1,11 @@
 {
   "name": "Dark Store Delivery",
   "description": "Quick-commerce dark store unit economics",
-  "cac": 18.00,
+  "channels": [
+    {"name": "Paid", "cac": 25.00, "pct_of_new_customers": 0.60},
+    {"name": "Organic", "cac": 8.00, "pct_of_new_customers": 0.30},
+    {"name": "Referral", "cac": 4.00, "pct_of_new_customers": 0.10}
+  ],
   "aov": 34.00,
   "orders_per_month": 2.8,
   "gross_margin_pct": 0.30,

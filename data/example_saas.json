@@ -1,7 +1,11 @@
 {
   "name": "B2B SaaS",
   "description": "Typical B2B SaaS unit economics",
-  "cac": 350.00,
+  "channels": [
+    {"name": "Paid Search", "cac": 450.00, "pct_of_new_customers": 0.40},
+    {"name": "Content/SEO", "cac": 120.00, "pct_of_new_customers": 0.35},
+    {"name": "Referral", "cac": 80.00, "pct_of_new_customers": 0.25}
+  ],
   "aov": 99.00,
   "orders_per_month": 1.0,
   "gross_margin_pct": 0.82,
