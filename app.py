@@ -126,7 +126,8 @@ with st.sidebar:
     monthly_fixed = st.number_input("Monthly Fixed Costs ($)", min_value=0.0, value=defaults.get("monthly_fixed_costs", 0.0), step=100.0, format="%.0f")
 
     st.markdown("---")
-    st.subheader("Discounting")
+    st.subheader("Growth & Discounting")
+    monthly_arpu_growth = st.slider("Monthly ARPU Growth %", min_value=0, max_value=20, value=0) / 100.0
     discount_rate_pct = st.slider("Discount Rate %", min_value=0, max_value=30, value=10)
     annual_discount_rate = discount_rate_pct / 100.0
 
@@ -202,7 +203,7 @@ if flags:
             unsafe_allow_html=True,
         )
 
-if monthly_arpu_growth > 0:
+if inputs.monthly_arpu_growth_rate > inputs.monthly_churn_rate:
     st.info("Negative churn active — expansion revenue is outpacing lost customers")
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
