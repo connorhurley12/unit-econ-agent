@@ -67,6 +67,11 @@ with st.sidebar:
     monthly_churn = st.slider("Monthly Churn %", min_value=0, max_value=50, value=int(defaults["monthly_churn_rate"] * 100)) / 100.0
     monthly_fixed = st.number_input("Monthly Fixed Costs ($)", min_value=0.0, value=defaults.get("monthly_fixed_costs", 0.0), step=100.0, format="%.0f")
 
+    st.markdown("---")
+    st.subheader("Discounting")
+    discount_rate_pct = st.slider("Discount Rate %", min_value=0, max_value=30, value=10)
+    annual_discount_rate = discount_rate_pct / 100.0
+
 inputs = UnitEconInputs(
     cac=cac,
     aov=aov,
@@ -75,6 +80,7 @@ inputs = UnitEconInputs(
     variable_cost_per_order=variable_cost,
     monthly_churn_rate=monthly_churn,
     monthly_fixed_costs=monthly_fixed,
+    annual_discount_rate=annual_discount_rate,
 )
 
 # ── Compute ───────────────────────────────────────────────────────────────────
@@ -85,18 +91,39 @@ outputs = compute(inputs)
 
 st.markdown("## Key Metrics")
 
-kpi_cols = st.columns(5)
+show_discounted = st.toggle("Show Discounted LTV", value=False)
 
-with kpi_cols[0]:
+if show_discounted:
+    kpi_cols = st.columns(6)
+else:
+    kpi_cols = st.columns(5)
+
+col_idx = 0
+with kpi_cols[col_idx]:
     st.metric("LTV", f"${outputs.ltv:,.2f}")
-with kpi_cols[1]:
-    st.metric("LTV : CAC", f"{outputs.ltv_cac_ratio:.2f}x")
-with kpi_cols[2]:
+col_idx += 1
+
+if show_discounted:
+    with kpi_cols[col_idx]:
+        st.metric("Discounted LTV", f"${outputs.discounted_ltv:,.2f}")
+    col_idx += 1
+
+with kpi_cols[col_idx]:
+    if show_discounted:
+        st.metric("LTV : CAC", f"{outputs.ltv_cac_ratio:.2f}x")
+        st.metric("Disc. LTV : CAC", f"{outputs.discounted_ltv_cac_ratio:.2f}x")
+    else:
+        st.metric("LTV : CAC", f"{outputs.ltv_cac_ratio:.2f}x")
+col_idx += 1
+
+with kpi_cols[col_idx]:
     payback_label = f"{outputs.payback_months:.1f} mo" if outputs.payback_months < 999 else "∞"
     st.metric("Payback Period", payback_label)
-with kpi_cols[3]:
+col_idx += 1
+with kpi_cols[col_idx]:
     st.metric("Contribution / Order", f"${outputs.contribution_margin_per_order:,.2f}")
-with kpi_cols[4]:
+col_idx += 1
+with kpi_cols[col_idx]:
     color = health_score_color(outputs.health_score)
     st.metric("Health Score", f"{outputs.health_score}/100")
 
@@ -139,6 +166,14 @@ with tab_cohort:
         name="Cumulative Contribution",
         line=dict(color=PRIMARY, width=3),
     ))
+    if show_discounted:
+        fig_ltv.add_trace(go.Scatter(
+            x=cohort_df["month"],
+            y=cohort_df["discounted_cumulative_contribution"],
+            mode="lines",
+            name="Discounted Cumulative Contribution",
+            line=dict(color=INDIGO, width=3, dash="dot"),
+        ))
     fig_ltv.add_trace(go.Scatter(
         x=cohort_df["month"],
         y=cohort_df["cac_threshold"],
@@ -164,6 +199,14 @@ with tab_cohort:
         height=420,
     )
     st.plotly_chart(fig_ltv, use_container_width=True)
+
+    if show_discounted:
+        st.info(
+            "**Discounted LTV** applies the time value of money. "
+            "A dollar of customer revenue 3 years from now is worth less than a dollar today. "
+            f"Using a {discount_rate_pct}% annual discount rate "
+            f"(~{((1 + annual_discount_rate) ** (1/12) - 1) * 100:.2f}%/month)."
+        )
 
     # Survivor % area chart + monthly revenue bar chart side by side
     col_surv, col_rev = st.columns(2)
