@@ -22,6 +22,7 @@ class UnitEconInputs:
     variable_cost_per_order: float  # Variable cost per order ($)
     monthly_churn_rate: float     # Monthly churn as a decimal (e.g. 0.08)
     monthly_fixed_costs: float = 0.0  # Monthly fixed overhead ($)
+    annual_discount_rate: float = 0.10  # Cost of capital / hurdle rate
 
 
 @dataclass
@@ -41,6 +42,8 @@ class UnitEconOutputs:
     payback_months: float
     health_score: int
     health_flags: List[HealthFlag] = field(default_factory=list)
+    discounted_ltv: float = 0.0
+    discounted_ltv_cac_ratio: float = 0.0
 
 
 # ── Core calculations ─────────────────────────────────────────────────────────
@@ -78,6 +81,24 @@ def compute_payback_months(inputs: UnitEconInputs) -> float:
     if mc <= 0:
         return float("inf")
     return inputs.cac / mc
+
+
+def compute_discounted_ltv(inputs: UnitEconInputs) -> float:
+    """Discounted LTV using monthly discounted cash flows over the avg lifetime."""
+    mc = compute_monthly_contribution(inputs)
+    if inputs.monthly_churn_rate <= 0:
+        return float("inf")
+
+    monthly_rate = (1 + inputs.annual_discount_rate) ** (1 / 12) - 1
+    avg_lifetime_months = int(round(1.0 / inputs.monthly_churn_rate))
+
+    discounted_ltv = 0.0
+    for t in range(1, avg_lifetime_months + 1):
+        survivors = (1 - inputs.monthly_churn_rate) ** (t - 1)
+        monthly_cf = survivors * mc
+        discounted_ltv += monthly_cf / (1 + monthly_rate) ** t
+
+    return discounted_ltv
 
 
 # ── Health scoring ────────────────────────────────────────────────────────────
@@ -155,6 +176,8 @@ def compute(inputs: UnitEconInputs) -> UnitEconOutputs:
     ltv = compute_ltv(inputs)
     ltv_cac = compute_ltv_cac_ratio(inputs)
     payback = compute_payback_months(inputs)
+    disc_ltv = compute_discounted_ltv(inputs)
+    disc_ltv_cac = (disc_ltv / inputs.cac) if inputs.cac > 0 else float("inf")
 
     outputs = UnitEconOutputs(
         contribution_margin_per_order=cm_order,
@@ -164,6 +187,8 @@ def compute(inputs: UnitEconInputs) -> UnitEconOutputs:
         payback_months=payback,
         health_score=0,
         health_flags=[],
+        discounted_ltv=disc_ltv,
+        discounted_ltv_cac_ratio=disc_ltv_cac,
     )
 
     outputs.health_flags = compute_health_flags(inputs, outputs)
@@ -182,6 +207,7 @@ def inputs_from_dict(d: dict) -> UnitEconInputs:
         variable_cost_per_order=float(d["variable_cost_per_order"]),
         monthly_churn_rate=float(d["monthly_churn_rate"]),
         monthly_fixed_costs=float(d.get("monthly_fixed_costs", 0)),
+        annual_discount_rate=float(d.get("annual_discount_rate", 0.10)),
     )
 
 
@@ -223,7 +249,9 @@ def cli_main(argv: list | None = None) -> None:
     print(f"  Contribution/order:      ${outputs.contribution_margin_per_order:,.2f}")
     print(f"  Monthly contribution:    ${outputs.monthly_contribution:,.2f}")
     print(f"  LTV:                     ${outputs.ltv:,.2f}")
+    print(f"  Discounted LTV:          ${outputs.discounted_ltv:,.2f}")
     print(f"  LTV:CAC ratio:           {outputs.ltv_cac_ratio:.2f}x")
+    print(f"  Disc. LTV:CAC ratio:     {outputs.discounted_ltv_cac_ratio:.2f}x")
     print(f"  Payback period:          {outputs.payback_months:.1f} months")
     print(f"  Health score:            {outputs.health_score}/100")
     print("-" * 50)
