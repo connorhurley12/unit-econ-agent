@@ -28,7 +28,6 @@ def build_cohort_table(inputs: UnitEconInputs, n_months: int = 36) -> pd.DataFra
     initial_customers = 1_000
     retention = 1.0 - inputs.monthly_churn_rate
     total_cac = initial_customers * inputs.blended_cac
-    total_cac = initial_customers * inputs.cac
     g = inputs.monthly_arpu_growth_rate
 
     months = np.arange(1, n_months + 1)
@@ -65,5 +64,5 @@ def find_payback_month(cohort_df: pd.DataFrame) -> int | None:
     """Return the first month where cumulative contribution >= CAC threshold, or None."""
     mask = cohort_df["cumulative_contribution"] >= cohort_df["cac_threshold"]
     if mask.any():
-        return int(cohort_df.loc[mask.idxmin(), "month"])
+        return int(cohort_df.loc[mask.idxmax(), "month"])
     return None

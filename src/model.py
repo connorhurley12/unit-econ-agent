@@ -305,7 +305,7 @@ def cli_main(argv: list | None = None) -> None:
     if outputs.health_flags:
         print("  FLAGS:")
         for flag in outputs.health_flags:
-            icon = {"critical": "!!!", "warning": " ! ", "watch": " ~ "}[flag.severity]
+            icon = {"critical": "!!!", "warning": " ! ", "watch": " ~ ", "positive": " + "}[flag.severity]
             print(f"  [{icon}] {flag.severity.upper()}: {flag.message}")
     else:
         print("  No health flags — looking good!")

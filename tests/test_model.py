@@ -193,9 +193,10 @@ class TestExpansionRevenue:
     def test_skok_formula_values(self):
         """Verify the Skok formula: LTV = a/c + m/c^2."""
         inputs = UnitEconInputs(
-            cac=100.0, aov=50.0, orders_per_month=1.0,
+            aov=50.0, orders_per_month=1.0,
             gross_margin_pct=0.80, variable_cost_per_order=0.0,
             monthly_churn_rate=0.10, monthly_arpu_growth_rate=0.03,
+            channels=[{"name": "Blended", "cac": 100.0, "pct_of_new_customers": 1.0}],
         )
         # a = 50 * 0.80 * 1.0 = 40.0
         # m = 40.0 * 0.03 = 1.2
@@ -206,9 +207,10 @@ class TestExpansionRevenue:
     def test_negative_churn_flag_when_growth_exceeds_churn(self):
         """When ARPU growth > churn, a positive 'negative churn' flag appears."""
         inputs = UnitEconInputs(
-            cac=100.0, aov=50.0, orders_per_month=1.0,
+            aov=50.0, orders_per_month=1.0,
             gross_margin_pct=0.80, variable_cost_per_order=0.0,
             monthly_churn_rate=0.05, monthly_arpu_growth_rate=0.08,
+            channels=[{"name": "Blended", "cac": 100.0, "pct_of_new_customers": 1.0}],
         )
         outputs = compute(inputs)
         severities = [f.severity for f in outputs.health_flags]
@@ -227,9 +229,10 @@ class TestExpansionRevenue:
     def test_default_arpu_growth_is_zero(self):
         """Default monthly_arpu_growth_rate should be 0."""
         inputs = UnitEconInputs(
-            cac=18.0, aov=34.0, orders_per_month=2.8,
+            aov=34.0, orders_per_month=2.8,
             gross_margin_pct=0.30, variable_cost_per_order=4.20,
             monthly_churn_rate=0.08,
+            channels=[{"name": "Blended", "cac": 18.0, "pct_of_new_customers": 1.0}],
         )
         assert inputs.monthly_arpu_growth_rate == 0.0
 
