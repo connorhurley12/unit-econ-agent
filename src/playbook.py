@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import List
 
 import pandas as pd
-from fpdf import FPDF
 
 from src.model import UnitEconInputs, UnitEconOutputs
 
@@ -77,6 +76,8 @@ def generate_pdf(
     template_name: str,
 ) -> bytes:
     """Generate a PDF playbook report. Returns bytes for download."""
+    from fpdf import FPDF  # lazy import — fpdf2 is only needed for PDF export
+
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
