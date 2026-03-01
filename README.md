@@ -16,8 +16,9 @@ license: mit
 
 **Model. Measure. Decide.**
 
-A decision-grade unit economics engine for operators and investors who need
-answers — not spreadsheets.
+A guided unit economics simulator for operators and investors who need
+answers — not spreadsheets. Think TurboTax for unit economics: one decision
+at a time, instant impact, full control.
 
 [![Python](https://img.shields.io/badge/python-3.7+-3776AB?style=flat&logo=python&logoColor=white)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/streamlit-1.41+-FF4B4B?style=flat&logo=streamlit&logoColor=white)](https://streamlit.io)
@@ -34,24 +35,55 @@ Every growth-stage company asks the same question: **"Is our customer acquisitio
 
 The answer lives in unit economics — but building reliable models is tedious. Teams default to fragile spreadsheets, inconsistent assumptions, and metrics that don't travel well across stakeholders.
 
-Unit Econ Builder replaces that workflow with a structured, interactive modeling environment that produces investor-ready outputs in minutes.
+Unit economics is inherently sequential — every number feeds the next — but if you dump all the levers on screen at once, even an MBA freezes. The fix isn't removing complexity, it's **revealing it progressively**.
+
+Unit Econ Builder walks you through a 5-stage guided simulation that produces investor-ready outputs in minutes.
 
 ---
 
-## What It Does
+## How It Works — The 5-Stage Journey
 
-Unit Econ Builder takes six core inputs and produces a complete profitability picture:
+### Stage 1 — "What's your business?"
 
-| Input | What It Captures |
-|-------|-----------------|
-| **Customer Acquisition Cost (CAC)** | Blended cost to acquire one customer |
-| **Average Order Value (AOV)** | Revenue per transaction |
-| **Orders per Month** | Purchase frequency |
-| **Gross Margin %** | Revenue retained after COGS |
-| **Variable Cost per Order** | Fulfillment, packaging, delivery |
-| **Monthly Churn Rate** | Percentage of customers lost per period |
+Pick a template archetype — **Delivery Marketplace**, **SaaS Marketplace**, **Services Marketplace**, or **Custom** — and start with sensible defaults and a labeled P&L structure. Nobody starts from a blank screen.
 
-From these inputs, the engine computes:
+### Stage 2 — "Set your assumptions"
+
+Walk through each layer of the unit economics stack, one card at a time:
+
+| Layer | What You Set | Example Context |
+|-------|-------------|-----------------|
+| **Demand** | AOV, orders/month | "DoorDash averages $30–45 per order" |
+| **Revenue & Margins** | Gross margin % (take rate) | "Delivery: 25–35%. SaaS: 70–85%." |
+| **Variable Costs** | Fulfillment cost per order | "Quick commerce: $3–6/order" |
+| **Retention** | Monthly churn, ARPU growth | "Best-in-class delivery: 5–8% churn" |
+| **Fixed Costs & Acquisition** | Overhead, channel-level CAC | "Blend across paid, organic, referral" |
+
+Each slider shows a **typical range indicator** and a one-sentence explainer. The education is embedded in the input, not in a separate tutorial.
+
+### Stage 3 — "Your unit economics snapshot"
+
+One clean **waterfall chart** showing revenue flowing down to contribution margin per order. Green for revenue, red for costs, bold for margin. Below the waterfall: **CM/order**, **CM%**, and **orders to breakeven** at current fixed costs.
+
+### Stage 4 — "What if?"
+
+Pull one lever at a time and watch the waterfall change. Pre-built scenarios:
+
+- "What if AOV increases 15%?"
+- "What if delivery cost drops $1.50 per order?"
+- "What if you batch 2 orders per delivery run?"
+- "What if spoilage doubles?"
+- "What if churn drops to 5%?"
+
+Each scenario shows a **side-by-side waterfall** (before/after) and a **plain-English summary**: *"Batching 2 orders per run improves contribution margin from $6.00 to $8.10 per order, reaching breakeven at 1,481 orders/month instead of 2,000."*
+
+### Stage 5 — "Your playbook"
+
+Auto-generated executive summary: your model, your most sensitive levers (**tornado chart**), and the 2–3 moves that get you to profitability fastest. **Exportable as PDF, JSON, or CSV.** This is the thing people screenshot and share.
+
+---
+
+## What It Computes
 
 | Output | Why It Matters |
 |--------|---------------|
@@ -97,15 +129,9 @@ python src/model.py --config data/example_dark_store.json
 
 ---
 
-## Core Capabilities
+## Health Diagnostics
 
-### 1. KPI Dashboard
-
-Real-time calculation of LTV, LTV:CAC, payback period, contribution margin, and health score — updated instantly as inputs change.
-
-### 2. Health Diagnostics
-
-Automated flags surface risks before they compound:
+Automated flags surface risks at every stage:
 
 | Severity | Trigger | Signal |
 |----------|---------|--------|
@@ -114,24 +140,6 @@ Automated flags surface risks before they compound:
 | **Warning** | Contribution margin < 10% of AOV | Margin structure cannot absorb cost volatility |
 | **Watch** | Monthly churn > 10% | Retention risk — investigate activation and engagement |
 | **Positive** | Negative net churn | Expansion revenue exceeds losses — rare and valuable |
-
-### 3. Cohort LTV Curves
-
-36-month forward projection of a 1,000-customer cohort:
-- **Survival curve** — geometric decay at the modeled churn rate
-- **Cumulative contribution vs. CAC** — visualizes the payback crossover
-- **Monthly revenue trend** — with optional ARPU expansion
-
-### 4. Sensitivity Analysis
-
-- **Tornado chart** — ranks lever impact from a 10% improvement in each variable
-- **Single-lever sweep** — charts LTV:CAC across a ±40% range for any selected parameter
-
-### 5. Export
-
-Download investor-ready artifacts:
-- JSON summary (inputs + computed outputs)
-- LTV cohort curve as CSV
 
 ---
 
@@ -182,25 +190,18 @@ Full methodology: [`docs/methodology.md`](docs/methodology.md)
 
 ---
 
-## Example Scenarios
+## Archetype Templates
 
-Two presets are included to demonstrate the model across business types:
+Four templates are included, each with pre-loaded defaults, typical ranges, and contextual help:
 
-| Metric | Dark Store Delivery | B2B SaaS |
-|--------|:--:|:--:|
-| CAC | $18 | $350 |
-| AOV | $34 | $99 |
-| Orders / Month | 2.8 | 1.0 |
-| Gross Margin | 30% | 82% |
-| Variable Cost / Order | $4.20 | $5.00 |
-| Monthly Churn | 8% | 3% |
-| | | |
-| **LTV** | **~$203** | **~$2,527** |
-| **LTV:CAC** | **~11.3x** | **~7.2x** |
-| **Payback** | **~1.1 mo** | **~4.6 mo** |
-| **Health Score** | **93** | **100** |
+| Template | AOV | GM% | Var Cost | Churn | Example |
+|----------|:---:|:---:|:--------:|:-----:|---------|
+| **Delivery Marketplace** | $34 | 30% | $4.20 | 8% | DoorDash, Gopuff |
+| **SaaS Marketplace** | $99 | 82% | $5.00 | 3% | B2B subscriptions |
+| **Services Marketplace** | $150 | 45% | $12.00 | 6% | Thumbtack, TaskRabbit |
+| **Custom** | $50 | 40% | $5.00 | 7% | Start from balanced defaults |
 
-The dark store model wins on payback speed. The SaaS model wins on absolute LTV. Both clear the 3:1 benchmark comfortably — but for different structural reasons.
+Select an archetype in Stage 1 to load sensible defaults. Every value is adjustable in Stage 2.
 
 ---
 
@@ -209,21 +210,39 @@ The dark store model wins on payback speed. The SaaS model wins on absolute LTV.
 ```
 unit-econ-builder/
 │
-├── app.py                        Streamlit UI — sidebar inputs, KPI cards, tabbed views
+├── app.py                        Orchestrator — session state, progress bar, stage dispatch
 │
-├── src/
-│   ├── model.py                  Pure-Python calculation engine (no framework deps)
+├── stages/                       Journey UI (one module per stage)
+│   ├── __init__.py               Navigation helpers, progress bar renderer
+│   ├── stage1_archetype.py       "What's your business?" — template selection
+│   ├── stage2_assumptions.py     "Set your assumptions" — layer-by-layer input cards
+│   ├── stage3_snapshot.py        "Your snapshot" — waterfall chart + KPIs
+│   ├── stage4_whatif.py          "What if?" — scenario comparison
+│   └── stage5_playbook.py        "Your playbook" — recommendations + export
+│
+├── src/                          Calculation engine (zero Streamlit imports)
+│   ├── model.py                  Core engine: UnitEconInputs → UnitEconOutputs
+│   ├── waterfall.py              Waterfall chart data builder (Plotly go.Waterfall)
+│   ├── scenarios.py              Pre-built what-if scenarios + impact summaries
+│   ├── playbook.py               Recommendation engine + PDF export (fpdf2)
 │   ├── cohorts.py                36-month cohort simulation & payback detection
 │   ├── sensitivity.py            Tornado + single-lever sweep analysis
 │   ├── health.py                 Diagnostic flag rendering & severity sorting
 │   └── export.py                 JSON/CSV serialization utilities
 │
 ├── data/
-│   ├── example_dark_store.json   Quick-commerce preset
-│   └── example_saas.json         B2B SaaS preset
+│   ├── archetypes/               Template configs (model inputs + UI metadata)
+│   │   ├── delivery_marketplace.json
+│   │   ├── saas_marketplace.json
+│   │   ├── services_marketplace.json
+│   │   └── custom.json
+│   ├── example_dark_store.json   Legacy preset (CLI-compatible)
+│   └── example_saas.json         Legacy preset (CLI-compatible)
 │
 ├── tests/
-│   └── test_model.py             13 test classes, 3 fixture scenarios
+│   ├── test_model.py             Core calculation tests (25 tests)
+│   ├── test_waterfall.py         Waterfall chart tests (11 tests)
+│   └── test_scenarios.py         Scenario engine tests (11 tests)
 │
 └── docs/
     └── methodology.md            Formulas, scoring, and model assumptions
@@ -231,9 +250,10 @@ unit-econ-builder/
 
 **Design decisions:**
 
+- **Guided journey, not a dashboard.** `app.py` is a ~55-line orchestrator that routes to stage modules based on `st.session_state.stage`. Users progress linearly but can navigate back at any time.
 - **Separation of calculation from presentation.** `src/model.py` has zero Streamlit imports — it runs standalone via CLI and is independently testable.
 - **Dataclass contracts.** `UnitEconInputs` and `UnitEconOutputs` provide typed, self-documenting interfaces between layers.
-- **Modular analysis.** Cohort simulation, sensitivity analysis, and health diagnostics are isolated modules — swap or extend without touching the core engine.
+- **Modular analysis.** Waterfall charts, scenarios, sensitivity analysis, and health diagnostics are isolated modules — swap or extend without touching the core engine.
 
 ---
 
@@ -243,15 +263,13 @@ unit-econ-builder/
 python -m pytest tests/ -v
 ```
 
-Coverage spans all core calculations across three fixture scenarios:
+47 tests across three test modules:
 
-| Fixture | Purpose |
-|---------|---------|
-| `dark_store_inputs` | Healthy quick-commerce economics |
-| `bad_economics_inputs` | Intentionally unprofitable — validates critical flags |
-| `high_churn_inputs` | 15% monthly churn — validates retention warnings |
-
-Tests validate contribution margins, LTV calculations (simple and Skok), payback periods, health scores, diagnostic flags, expansion revenue, and full `compute()` integration.
+| Module | Tests | Coverage |
+|--------|:-----:|---------|
+| `test_model.py` | 25 | Core calculations: CM, LTV (simple + Skok), payback, health score, flags, expansion revenue |
+| `test_waterfall.py` | 11 | Waterfall data structure, value correctness, figure generation |
+| `test_scenarios.py` | 11 | Scenario application, impact summaries, all pre-built scenarios |
 
 ---
 
@@ -271,6 +289,7 @@ For local development, the Streamlit server runs headless on port 7860 by defaul
 | Visualization | Plotly |
 | Data manipulation | Pandas |
 | Numerical engine | NumPy |
+| PDF export | fpdf2 |
 | Testing | pytest |
 
 ---
@@ -288,6 +307,6 @@ These are intentional scope boundaries, not oversights. The goal is a sharp, rel
 
 <div align="center">
 
-**Built for operators who measure what matters.**
+**Built for operators who measure what matters. One stage at a time.**
 
 </div>
