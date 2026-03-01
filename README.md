@@ -40,7 +40,19 @@ Unit Econ Builder replaces that workflow with a structured, interactive modeling
 
 ## What It Does
 
-Unit Econ Builder takes six core inputs and produces a complete profitability picture:
+Unit Econ Builder is a **5-stage guided journey** that walks you from business type selection to an actionable playbook. Pick an archetype, tune your assumptions with guided sliders, see your economics visualized, stress-test scenarios, and walk away with prioritized recommendations.
+
+### The 5 Stages
+
+| Stage | Name | File | What It Does |
+|:-----:|------|------|-------------|
+| 1 | **What's your business?** | `stages/stage1_archetype.py` | 4 archetype cards (Delivery, SaaS, Services, Custom) with pre-loaded defaults |
+| 2 | **Set your assumptions** | `stages/stage2_assumptions.py` | 5 expandable cards with sliders showing typical ranges and one-sentence explainers |
+| 3 | **Your snapshot** | `stages/stage3_snapshot.py` | Waterfall chart (revenue &rarr; costs &rarr; CM) + 3 headline KPIs + diagnostics |
+| 4 | **What if?** | `stages/stage4_whatif.py` | 6 pre-built scenario buttons + custom lever builder, side-by-side waterfalls, impact narrative |
+| 5 | **Your playbook** | `stages/stage5_playbook.py` | Tornado chart, 2-3 auto-generated recommendations, PDF/JSON/CSV export |
+
+### Core Inputs
 
 | Input | What It Captures |
 |-------|-----------------|
@@ -51,7 +63,7 @@ Unit Econ Builder takes six core inputs and produces a complete profitability pi
 | **Variable Cost per Order** | Fulfillment, packaging, delivery |
 | **Monthly Churn Rate** | Percentage of customers lost per period |
 
-From these inputs, the engine computes:
+### Computed Outputs
 
 | Output | Why It Matters |
 |--------|---------------|
@@ -97,15 +109,19 @@ python src/model.py --config data/example_dark_store.json
 
 ---
 
-## Core Capabilities
+## Stage Details
 
-### 1. KPI Dashboard
+### 1. Archetype Selection
 
-Real-time calculation of LTV, LTV:CAC, payback period, contribution margin, and health score — updated instantly as inputs change.
+Choose from four business templates — Delivery / Marketplace, SaaS, Services, or Custom — each pre-loaded with realistic defaults and typical ranges so you start from a sensible baseline.
 
-### 2. Health Diagnostics
+### 2. Guided Assumptions
 
-Automated flags surface risks before they compound:
+Five expandable cards with sliders, contextual help text, and range indicators. Adjust CAC, AOV, margins, churn, and variable costs with guardrails that prevent nonsensical inputs.
+
+### 3. Snapshot
+
+Waterfall chart (revenue &rarr; costs &rarr; contribution margin) built with Plotly, three headline KPI cards, and automated health diagnostics:
 
 | Severity | Trigger | Signal |
 |----------|---------|--------|
@@ -115,23 +131,13 @@ Automated flags surface risks before they compound:
 | **Watch** | Monthly churn > 10% | Retention risk — investigate activation and engagement |
 | **Positive** | Negative net churn | Expansion revenue exceeds losses — rare and valuable |
 
-### 3. Cohort LTV Curves
+### 4. What If?
 
-36-month forward projection of a 1,000-customer cohort:
-- **Survival curve** — geometric decay at the modeled churn rate
-- **Cumulative contribution vs. CAC** — visualizes the payback crossover
-- **Monthly revenue trend** — with optional ARPU expansion
+Six pre-built scenario buttons (e.g. "Cut CAC 20%", "Double orders") plus a custom lever builder. Side-by-side waterfall comparison with an auto-generated impact narrative showing exactly what changed and by how much.
 
-### 4. Sensitivity Analysis
+### 5. Playbook
 
-- **Tornado chart** — ranks lever impact from a 10% improvement in each variable
-- **Single-lever sweep** — charts LTV:CAC across a ±40% range for any selected parameter
-
-### 5. Export
-
-Download investor-ready artifacts:
-- JSON summary (inputs + computed outputs)
-- LTV cohort curve as CSV
+Tornado chart ranking lever impact, 2-3 auto-generated recommendations prioritized by effort vs. impact, and full export suite — PDF report, JSON summary, and CSV data
 
 ---
 
@@ -207,23 +213,40 @@ The dark store model wins on payback speed. The SaaS model wins on absolute LTV.
 ## Architecture
 
 ```
-unit-econ-builder/
+unit-econ-agent/
 │
-├── app.py                        Streamlit UI — sidebar inputs, KPI cards, tabbed views
+├── app.py                        55-line orchestrator — dispatches to stage modules
+│                                  via st.session_state.stage
+│
+├── stages/
+│   ├── __init__.py               Progress bar + back/next navigation
+│   ├── stage1_archetype.py       Business type selection (4 archetypes)
+│   ├── stage2_assumptions.py     Guided slider inputs with ranges & help text
+│   ├── stage3_snapshot.py        Waterfall chart + KPIs + diagnostics
+│   ├── stage4_whatif.py          Scenario builder with side-by-side comparison
+│   └── stage5_playbook.py        Recommendations + export (PDF/JSON/CSV)
 │
 ├── src/
 │   ├── model.py                  Pure-Python calculation engine (no framework deps)
 │   ├── cohorts.py                36-month cohort simulation & payback detection
 │   ├── sensitivity.py            Tornado + single-lever sweep analysis
 │   ├── health.py                 Diagnostic flag rendering & severity sorting
-│   └── export.py                 JSON/CSV serialization utilities
+│   ├── export.py                 JSON/CSV serialization utilities
+│   ├── waterfall.py              Plotly go.Waterfall chart builder
+│   ├── scenarios.py              Pre-built what-if scenarios with impact summaries
+│   └── playbook.py               Recommendation generator + PDF export (fpdf2)
 │
 ├── data/
 │   ├── example_dark_store.json   Quick-commerce preset
-│   └── example_saas.json         B2B SaaS preset
+│   ├── example_saas.json         B2B SaaS preset
+│   └── archetypes/
+│       ├── delivery_marketplace.json   Delivery / marketplace defaults + slider metadata
+│       ├── saas_marketplace.json       SaaS defaults + slider metadata
+│       ├── services_marketplace.json   Services defaults + slider metadata
+│       └── custom.json                 Blank-slate custom archetype
 │
 ├── tests/
-│   └── test_model.py             13 test classes, 3 fixture scenarios
+│   └── test_model.py             47 tests (25 original + 22 new)
 │
 └── docs/
     └── methodology.md            Formulas, scoring, and model assumptions
@@ -234,6 +257,8 @@ unit-econ-builder/
 - **Separation of calculation from presentation.** `src/model.py` has zero Streamlit imports — it runs standalone via CLI and is independently testable.
 - **Dataclass contracts.** `UnitEconInputs` and `UnitEconOutputs` provide typed, self-documenting interfaces between layers.
 - **Modular analysis.** Cohort simulation, sensitivity analysis, and health diagnostics are isolated modules — swap or extend without touching the core engine.
+- **Single-file orchestrator with session_state routing** (not Streamlit multi-page) for full navigation control across stages.
+- **Archetype templates** in `data/archetypes/` carry layer metadata (ranges, help text) that power the guided sliders.
 
 ---
 
@@ -243,7 +268,7 @@ unit-econ-builder/
 python -m pytest tests/ -v
 ```
 
-Coverage spans all core calculations across three fixture scenarios:
+47 tests (25 original + 22 new) across three fixture scenarios:
 
 | Fixture | Purpose |
 |---------|---------|
@@ -251,7 +276,7 @@ Coverage spans all core calculations across three fixture scenarios:
 | `bad_economics_inputs` | Intentionally unprofitable — validates critical flags |
 | `high_churn_inputs` | 15% monthly churn — validates retention warnings |
 
-Tests validate contribution margins, LTV calculations (simple and Skok), payback periods, health scores, diagnostic flags, expansion revenue, and full `compute()` integration.
+Tests validate contribution margins, LTV calculations (simple and Skok), payback periods, health scores, diagnostic flags, expansion revenue, full `compute()` integration, waterfall charts, scenario builders, and playbook generation. `UnitEconInputs` is unchanged — all original tests pass untouched.
 
 ---
 
@@ -271,6 +296,7 @@ For local development, the Streamlit server runs headless on port 7860 by defaul
 | Visualization | Plotly |
 | Data manipulation | Pandas |
 | Numerical engine | NumPy |
+| PDF export | fpdf2 |
 | Testing | pytest |
 
 ---
