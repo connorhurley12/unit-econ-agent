@@ -1,0 +1,39 @@
+{
+  "name": "Custom",
+  "description": "Start with balanced defaults and customize everything.",
+  "icon": "\u2699\ufe0f",
+  "model_inputs": {
+    "aov": 50.00,
+    "orders_per_month": 2.0,
+    "gross_margin_pct": 0.40,
+    "variable_cost_per_order": 5.00,
+    "monthly_churn_rate": 0.07,
+    "monthly_fixed_costs": 15000.00,
+    "monthly_arpu_growth_rate": 0.0,
+    "annual_discount_rate": 0.10,
+    "channels": [
+      {"name": "Paid", "cac": 30.0, "pct_of_new_customers": 0.60},
+      {"name": "Organic", "cac": 10.0, "pct_of_new_customers": 0.30},
+      {"name": "Referral", "cac": 5.0, "pct_of_new_customers": 0.10}
+    ]
+  },
+  "layers": {
+    "demand": {
+      "aov": {"min": 1.0, "max": 1000.0, "step": 1.0, "typical_range": [20, 200], "help": "Revenue per transaction or billing event."},
+      "orders_per_month": {"min": 0.1, "max": 30.0, "step": 0.1, "typical_range": [1.0, 5.0], "help": "How often a customer transacts each month."}
+    },
+    "revenue": {
+      "gross_margin_pct": {"min": 0.05, "max": 0.95, "step": 0.01, "typical_range": [0.25, 0.75], "help": "What percentage of revenue do you keep after direct costs?"}
+    },
+    "costs": {
+      "variable_cost_per_order": {"min": 0.0, "max": 100.0, "step": 0.50, "typical_range": [2.0, 15.0], "help": "Per-transaction variable costs: fulfillment, processing, support."}
+    },
+    "retention": {
+      "monthly_churn_rate": {"min": 0.01, "max": 0.30, "step": 0.01, "typical_range": [0.03, 0.10], "help": "What % of customers do you lose each month?"},
+      "monthly_arpu_growth_rate": {"min": 0.0, "max": 0.15, "step": 0.01, "typical_range": [0.0, 0.05], "help": "Do retained customers spend more over time?"}
+    },
+    "fixed_costs": {
+      "monthly_fixed_costs": {"min": 0.0, "max": 500000.0, "step": 1000.0, "typical_range": [5000, 50000], "help": "Monthly fixed overhead: rent, salaries, tech infrastructure."}
+    }
+  }
+}
