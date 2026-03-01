@@ -22,7 +22,7 @@ LEVERS: Dict[str, str] = {
 }
 
 
-def tweak_input(inputs: UnitEconInputs, field: str, pct_change: float) -> UnitEconInputs:
+def _tweak_input(inputs: UnitEconInputs, field: str, pct_change: float) -> UnitEconInputs:
     """Return a copy of inputs with one field adjusted by pct_change (e.g. 0.10 = +10%)."""
     if field == "blended_cac":
         new_channels = [
@@ -51,7 +51,7 @@ def tornado_data(inputs: UnitEconInputs, improvement_pct: float = 0.10) -> pd.Da
     for label, field in LEVERS.items():
         # For cost levers, improvement = reduction
         direction = -1.0 if field in ("blended_cac", "variable_cost_per_order", "monthly_churn_rate") else 1.0
-        tweaked = tweak_input(inputs, field, direction * improvement_pct)
+        tweaked = _tweak_input(inputs, field, direction * improvement_pct)
         improved = compute_ltv_cac_ratio(tweaked)
         delta = improved - baseline
         pct_delta = (delta / baseline * 100) if baseline != 0 else 0
@@ -83,7 +83,7 @@ def sweep_lever(
     pcts = np.linspace(-pct_range, pct_range, n_points)
     rows = []
     for pct in pcts:
-        tweaked = tweak_input(inputs, field, pct)
+        tweaked = _tweak_input(inputs, field, pct)
         ratio = compute_ltv_cac_ratio(tweaked)
         rows.append({
             "pct_change": pct,
