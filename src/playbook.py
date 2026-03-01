@@ -148,4 +148,4 @@ def generate_pdf(
                     f"Orders/month: {inputs.orders_per_month:.1f}  |  "
                     f"Fixed costs: ${inputs.monthly_fixed_costs:,.0f}/mo", ln=True)
 
-    return pdf.output()
+    return bytes(pdf.output())
